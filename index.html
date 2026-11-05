@@ -162,6 +162,7 @@ footer h4{margin:0 0 10px;font:700 17px 'Anek Bangla',sans-serif;color:var(--dee
 
 <script>
 // ================= CONFIG (এখানে বদলান) =================
+var WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzwJhmRWgDRTIydJlwXiOBpH1aEn6si8YmQ6KpoyhWp_x2eaAlnkJ4E9TYtIPqWJPnVfQ/exec";
 var CFG = {
   company: "নিউ হোপ ফিড মিল বাংলাদেশ লিমিটেড",
   phoneLabel: "হটলাইন: +880 1742-510889",
@@ -295,7 +296,7 @@ $('#f').addEventListener('submit', function(e){
     return;
   }
 
-  var btn = $('#submit'), txt = $('#btnText');
+  var btn = $('#submit'), txt = $('#btnText'), finished = false, timer;
   btn.disabled = true; txt.textContent = 'জমা হচ্ছে...';
   var data = {
     name: $('#name').value.trim(), mobile: mobile,
@@ -303,21 +304,29 @@ $('#f').addEventListener('submit', function(e){
     upazila: $('#upazila').value.trim(), farmType: $('#farmType').value,
     date: toDDMMYY($('#date').value)
   };
-  function done(){ btn.disabled = false; txt.textContent = 'জমা দিন'; }
-  google.script.run
-    .withSuccessHandler(function(res){
-      done();
-      if(res && res.status === 'success'){
-        popup(true, 'ধন্যবাদ, ' + data.name + '!', 'আপনার তথ্য জমা হয়েছে। আমাদের টিম শীঘ্রই আপনার সাথে যোগাযোগ করবে।');
-        $('#f').reset(); ddDivision.reset(); ddProduct.reset(); $('#date').value = today();
-      } else {
-        popup(false, 'জমা হয়নি', (res && res.message) ? res.message : 'কিছু একটা সমস্যা হয়েছে। আবার চেষ্টা করুন।');
-      }
-    })
-    .withFailureHandler(function(err){
-      done(); popup(false, 'সংযোগ সমস্যা', 'ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন। ' + (err && err.message ? '(' + err.message + ')' : ''));
-    })
-    .saveFormData(data);
+  function finish(res, err){
+    if(finished) return; finished = true; clearTimeout(timer);
+    btn.disabled = false; txt.textContent = 'জমা দিন';
+    if(res && res.status === 'success'){
+      popup(true, 'ধন্যবাদ, ' + data.name + '!', 'আপনার তথ্য জমা হয়েছে। আমাদের টিম শীঘ্রই আপনার সাথে যোগাযোগ করবে।');
+      $('#f').reset(); ddDivision.reset(); ddProduct.reset(); $('#date').value = today();
+    } else if(res){
+      popup(false, 'জমা হয়নি', res.message || 'কিছু একটা সমস্যা হয়েছে। আবার চেষ্টা করুন।');
+    } else {
+      popup(false, 'সংযোগ সমস্যা', 'ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।' + (err && err.message ? ' (' + err.message + ')' : ''));
+    }
+  }
+  timer = setTimeout(function(){ finish(null, {message:'সময় শেষ'}); }, 30000);
+  try {
+    if(window.google && google.script && google.script.run){
+      // Apps Script এর ভেতরে চললে
+      google.script.run.withSuccessHandler(function(r){ finish(r); }).withFailureHandler(function(er){ finish(null, er); }).saveFormData(data);
+    } else {
+      // GitHub Pages / অন্য হোস্টিং এ চললে: Web App এ সরাসরি POST (doPost)
+      fetch(WEB_APP_URL, { method:'POST', body: JSON.stringify(data) })
+        .then(function(r){ return r.json(); }).then(function(r){ finish(r); }).catch(function(er){ finish(null, er); });
+    }
+  } catch(er){ finish(null, er); }
 });
 </script>
 </body>
